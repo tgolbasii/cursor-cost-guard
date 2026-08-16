@@ -493,6 +493,7 @@ test('regional and explicitly enabled legacy Max uplifts apply before the Teams 
 
 test('reasoning effort is read from explicit hook fields or parameterized model names', () => {
   assert.equal(reasoningEffortFromPayload({ reasoning_effort: 'xhigh' }), 'extra-high');
+  assert.equal(reasoningEffortFromPayload({ model_params: [{ id: 'effort', value: 'max' }] }), 'max');
   assert.equal(reasoningEffortFromPayload({ model: 'gpt-5.6-luna-high' }), 'high');
   assert.equal(reasoningEffortFromPayload({ model: 'gpt-5.6-luna' }), null);
 });

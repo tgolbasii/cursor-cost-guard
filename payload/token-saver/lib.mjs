@@ -492,6 +492,13 @@ export function reasoningEffortFromPayload(payload = {}, rawModelName = modelNam
     const effort = canonicalReasoningEffort(value);
     if (effort) return effort;
   }
+  if (Array.isArray(payload.model_params)) {
+    for (const parameter of payload.model_params) {
+      if (String(parameter?.id || '').toLowerCase() !== 'effort') continue;
+      const effort = canonicalReasoningEffort(parameter.value);
+      if (effort) return effort;
+    }
+  }
   const match = String(rawModelName || '').match(
     /(?:^|[\s/_-])(extra[\s_-]?high|xhigh|high|medium|low|max)(?=$|[\s/_-])/i,
   );
