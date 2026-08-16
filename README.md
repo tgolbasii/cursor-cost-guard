@@ -13,7 +13,49 @@ A deterministic, cost-aware guard for Cursor Agent. It uses local hooks and scri
 - Calibrates an otherwise-unobservable fixed-context floor from `preCompact.context_tokens` and retains that floor after compaction.
 - Blocks direct Agent reads of large files while leaving Cursor Tab alone.
 - Tracks counts and sizes only. It never stores prompts, responses, thoughts, tool inputs/results/errors, files, or subagent task text.
-- Makes no network or model calls.
+- Guard hooks make no network or model calls; the optional billing refresh only calls the endpoint you explicitly configure.
+
+## Status bar and dashboard
+
+The optional `extension/` folder contains a dependency-free Cursor/VS Code extension. Install it with `Extensions: Install from Location...` and select `extension/` to get a status bar showing reconciled usage/quota and a per-conversation cost tree. It also provides commands to set or clear conversation limits and refresh billing.
+
+For a browser dashboard instead:
+
+```bash
+node ~/.cursor/token-saver/token-saverctl.mjs dashboard 4173
+```
+
+The dashboard binds to `127.0.0.1` and exposes local conversation estimates, limits, quota/reset data, and recent anomaly alerts. It does not transmit data.
+
+## Billing reconciliation and alerts
+
+Billing is opt-in and endpoint-agnostic because Cursor's usage endpoints and authentication vary by plan. Configure an authenticated JSON endpoint in `~/.cursor/token-saver/config.json`:
+
+```json
+{
+  "billing": {
+    "endpoint": "https://your-approved-cursor-usage-endpoint",
+    "tokenEnv": "CURSOR_USAGE_TOKEN",
+    "timeoutMs": 5000
+  }
+}
+```
+
+The endpoint may return `usedUsd`, `limitUsd`, `quotaUsed`, `quotaLimit`, and `resetAt` directly, or under a `usage`/`data` object. Set the token in the environment and run:
+
+```bash
+export CURSOR_USAGE_TOKEN=...
+node ~/.cursor/token-saver/token-saverctl.mjs billing refresh
+```
+
+Set per-conversation limits using the hash shown by `status --all`:
+
+```bash
+node ~/.cursor/token-saver/token-saverctl.mjs limit set <conversation-hash> 0.10 20
+node ~/.cursor/token-saver/token-saverctl.mjs limit clear <conversation-hash>
+```
+
+High projected costs and enforced prompt/tool blocks are recorded locally in `~/.cursor/token-saver/anomalies.jsonl`. View them with `token-saverctl.mjs anomalies`. Alerts are local-only and can be disabled with `anomalyAlerts.enabled: false`.
 
 It does **not** claim a real cache hit. Estimates use the cache-read scenario until you reconcile them with Cursor's usage dashboard.
 

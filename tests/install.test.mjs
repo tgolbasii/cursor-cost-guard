@@ -76,7 +76,7 @@ test('installer defaults to observation and migrates untouched 0.1 limits', asyn
   try {
     run('install.mjs', root, ['--profile', 'teams-third-party']);
     const config = JSON.parse(await readFile(path.join(root, 'token-saver', 'config.json'), 'utf8'));
-    assert.equal(config.packageVersion, '0.5.0');
+    assert.equal(config.packageVersion, '0.6.0');
     assert.equal(config.mode, 'observe');
     assert.equal(config.charsPerToken, 3);
     assert.equal(config.hardMaximumTurnsWithoutCompaction, 35);
@@ -102,7 +102,7 @@ test('upgrade from 0.2 preserves user limits and unrelated configuration', async
   try {
     run('install.mjs', root, ['--profile', 'teams-third-party']);
     const config = JSON.parse(await readFile(path.join(root, 'token-saver', 'config.json'), 'utf8'));
-    assert.equal(config.packageVersion, '0.5.0');
+    assert.equal(config.packageVersion, '0.6.0');
     assert.equal(config.hardMaximumTurnsWithoutCompaction, 14);
     assert.equal(config.maxEstimatedCarriedTokens, 76543);
     assert.equal(config.minimumFixedContextTokens, 4321);
@@ -131,7 +131,7 @@ test('upgrade from 0.3 migrates only untouched defaults to Luna profile', async 
   try {
     run('install.mjs', root, ['--profile', 'teams-third-party']);
     const config = JSON.parse(await readFile(path.join(root, 'token-saver', 'config.json'), 'utf8'));
-    assert.equal(config.packageVersion, '0.5.0');
+    assert.equal(config.packageVersion, '0.6.0');
     assert.equal(config.minimumTurnsBeforeCostGate, 0);
     assert.equal(config.hardMaximumTurnsWithoutCompaction, 35);
     assert.equal(config.maxEstimatedCarriedTokens, 80000);
@@ -154,7 +154,7 @@ test('upgrade from 0.4 adds Fast models and leaves legacy Max pricing disabled',
   try {
     run('install.mjs', root, ['--profile', 'teams-third-party']);
     const config = JSON.parse(await readFile(path.join(root, 'token-saver', 'config.json'), 'utf8'));
-    assert.equal(config.packageVersion, '0.5.0');
+    assert.equal(config.packageVersion, '0.6.0');
     assert.equal(config.maxEstimatedSessionCostUsd, 0.75);
     assert.equal(config.legacyMaxModePricingEnabled, false);
     assert.equal(config.models['gpt-5.6-luna-fast'].output, 2.4);

@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import {
   DEFAULT_CONFIG,
+  conversationHash,
   deepMerge,
   effectiveRates,
   estimateNextTurn,
@@ -63,6 +64,23 @@ test('hard turn gate blocks only after accepted limit and permits summarize', as
     assert.equal(blocked.continue, false);
     assert.match(blocked.user_message, /2 prompts/);
     assert.equal(invoke(root, base('beforeSubmitPrompt', { prompt: '/summarize' })).continue, true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('per-conversation limits block and write a local anomaly alert', async () => {
+  const root = await sandbox({ maxEstimatedSessionCostUsd: 10, minimumTurnsBeforeCostGate: 99 });
+  const hash = conversationHash('conversation-test');
+  try {
+    await writeJsonAtomic(path.join(root, 'token-saver', 'conversation-limits.json'), {
+      [hash]: { maxSessionCostUsd: 0.000001, updatedAt: new Date().toISOString() },
+    });
+    const result = invoke(root, base('beforeSubmitPrompt', { model: 'composer-2.5', prompt: 'limited' }));
+    assert.equal(result.continue, false);
+    assert.match(result.user_message, /conversation limit/);
+    const alerts = await readFile(path.join(root, 'token-saver', 'anomalies.jsonl'), 'utf8');
+    assert.match(alerts, /prompt-blocked/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

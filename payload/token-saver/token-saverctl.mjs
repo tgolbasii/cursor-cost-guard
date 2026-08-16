@@ -4,6 +4,7 @@ import path from 'node:path';
 import {
   cursorRoot,
   DEFAULT_CONFIG,
+  conversationHash,
   deepMerge,
   exists,
   loadConfig,
@@ -29,6 +30,11 @@ Usage:
   token-saverctl.mjs validate-config
   token-saverctl.mjs profile <individual|teams-third-party|auto-cost|cursor-model>
   token-saverctl.mjs prices
+  token-saverctl.mjs limit set <conversation-hash> <usd> [prompts]
+  token-saverctl.mjs limit clear <conversation-hash>
+  token-saverctl.mjs anomalies [--limit N]
+  token-saverctl.mjs billing refresh
+  token-saverctl.mjs dashboard [port]
 `;
   process[exitCode ? 'stderr' : 'stdout'].write(text);
   process.exitCode = exitCode;
@@ -142,6 +148,44 @@ async function main() {
       billingProfile: config.billingProfile,
       models: config.models,
     }, null, 2));
+    return;
+  }
+  if (command === 'limit') {
+    const action = args[0];
+    const hash = String(args[1] || '');
+    if (!hash) throw new Error('Usage: limit set|clear <conversation-hash> [usd] [prompts]');
+    const limits = (await readJson(paths.limits, {})) || {};
+    if (action === 'clear') {
+      delete limits[hash];
+    } else if (action === 'set') {
+      const maxSessionCostUsd = Number(args[2]);
+      const maxPromptsSinceCompaction = args[3] == null ? null : Number(args[3]);
+      if (!Number.isFinite(maxSessionCostUsd) || maxSessionCostUsd <= 0) throw new Error('Limit USD must be positive.');
+      if (maxPromptsSinceCompaction != null && (!Number.isInteger(maxPromptsSinceCompaction) || maxPromptsSinceCompaction <= 0)) throw new Error('Prompt limit must be a positive integer.');
+      limits[hash] = { maxSessionCostUsd, maxPromptsSinceCompaction, updatedAt: new Date().toISOString() };
+    } else throw new Error('Usage: limit set|clear <conversation-hash> [usd] [prompts]');
+    await writeJsonAtomic(paths.limits, limits);
+    console.log(`${action === 'clear' ? 'Cleared' : 'Set'} limit for ${hash}.`);
+    return;
+  }
+  if (command === 'anomalies') {
+    let entries = [];
+    try {
+      entries = (await readFile(paths.anomalies, 'utf8')).trim().split('\n').filter(Boolean).map(JSON.parse);
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+    const limit = Number(args[args.indexOf('--limit') + 1] || 50);
+    console.log(JSON.stringify(entries.slice(-limit), null, 2));
+    return;
+  }
+  if (command === 'billing' && args[0] === 'refresh') {
+    const { refreshBilling } = await import('./billing.mjs');
+    console.log(JSON.stringify(await refreshBilling(root), null, 2));
+    return;
+  }
+  if (command === 'dashboard') {
+    await import('./dashboard.mjs');
     return;
   }
   if (command === 'status') {

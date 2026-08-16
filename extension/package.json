@@ -1,0 +1,21 @@
+{
+  "name": "cursor-cost-guard-status",
+  "displayName": "Cursor Cost Guard",
+  "description": "Status bar, per-conversation limits, quota, and anomaly view for Cursor Cost Guard.",
+  "version": "0.6.0",
+  "publisher": "tgolbasii",
+  "license": "MIT",
+  "engines": { "vscode": "^1.90.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "cursorCostGuard.refresh", "title": "Cursor Cost Guard: Refresh" },
+      { "command": "cursorCostGuard.setConversationLimit", "title": "Cursor Cost Guard: Set Conversation Limit" },
+      { "command": "cursorCostGuard.clearConversationLimit", "title": "Cursor Cost Guard: Clear Conversation Limit" },
+      { "command": "cursorCostGuard.refreshBilling", "title": "Cursor Cost Guard: Refresh Billing" }
+    ],
+    "views": { "explorer": [{ "id": "cursorCostGuard.conversations", "name": "Cursor Cost Guard" }] }
+  }
+}

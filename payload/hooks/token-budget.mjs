@@ -4,6 +4,7 @@ import path from 'node:path';
 import {
   attachmentStats,
   cleanOldStates,
+  conversationLimit,
   conversationHash,
   cursorRoot,
   estimatedCarriedChars,
@@ -15,6 +16,7 @@ import {
   modelNameFromPayload,
   pathsFor,
   reasoningEffortFromPayload,
+  recordAnomaly,
   samplingProfileKey,
   validateConfig,
   withStateLock,
@@ -33,6 +35,16 @@ const CONTROL_COMMANDS = new Set([
 
 function emit(value = {}) {
   process.stdout.write(`${JSON.stringify(value)}\n`);
+}
+
+async function noteAnomaly(root, config, payload, kind, details) {
+  if (config.anomalyAlerts?.enabled === false) return;
+  await recordAnomaly(root, {
+    kind,
+    conversationHash: conversationHash(payload.conversation_id),
+    model: modelNameFromPayload(payload) || null,
+    ...details,
+  });
 }
 
 async function inputPayload() {
@@ -164,6 +176,13 @@ async function beforeSubmitPrompt(payload, root, config) {
         reasons.push(`projected total next-turn charge ${formatUsd(estimate.projectedTotalCostUsd)} exceeds ${formatUsd(config.maxProjectedTotalCostPerTurnUsd)}`);
       }
     }
+    const limit = await conversationLimit(root, conversationHash(payload.conversation_id));
+    if (limit?.maxSessionCostUsd > 0 && (state.estimatedSessionCostUsd || 0) + estimate.projectedTotalCostUsd > limit.maxSessionCostUsd) {
+      reasons.push(`conversation limit ${formatUsd(limit.maxSessionCostUsd)} would be exceeded`);
+    }
+    if (limit?.maxPromptsSinceCompaction > 0 && state.promptsSinceCompaction >= limit.maxPromptsSinceCompaction) {
+      reasons.push(`conversation limit of ${limit.maxPromptsSinceCompaction} prompts since compaction would be exceeded`);
+    }
     if (
       estimate.knownPricing &&
       (state.estimatedSessionCostUsd || 0) + estimate.projectedTotalCostUsd > config.maxEstimatedSessionCostUsd
@@ -180,9 +199,14 @@ async function beforeSubmitPrompt(payload, root, config) {
     state.lastEstimate = estimate;
     const enforcing = config.mode === 'enforce';
     if (reasons.length && enforcing) {
+      await noteAnomaly(root, config, payload, 'prompt-blocked', { reasons, projectedTotalCostUsd: estimate.projectedTotalCostUsd });
       await writeJsonAtomic(file, state);
       emit({ continue: false, user_message: blockMessage(reasons, estimate) });
       return;
+    }
+
+    if (estimate.knownPricing && estimate.projectedTotalCostUsd >= config.maxProjectedTotalCostPerTurnUsd * config.anomalyAlerts.projectedCostFraction) {
+      await noteAnomaly(root, config, payload, 'high-projected-cost', { projectedTotalCostUsd: estimate.projectedTotalCostUsd });
     }
 
     state.promptsSinceCompaction += 1;
@@ -285,6 +309,7 @@ async function preToolUse(payload, root, config) {
       state.lastToolGate = { at: now, reasons, estimate, enforcing };
     }
     if (reasons.length && enforcing) {
+      await noteAnomaly(root, config, payload, 'tool-loop-blocked', { reasons, toolCallsCurrentTurn: state.toolCallsCurrentTurn || 0 });
       state.toolCallsDeniedTotal = (state.toolCallsDeniedTotal || 0) + 1;
       await writeJsonAtomic(file, state);
       const message = toolBlockMessage(reasons, state, estimate);

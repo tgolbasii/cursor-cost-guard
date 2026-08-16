@@ -9,11 +9,12 @@ import {
   rm,
   stat,
   writeFile,
+  appendFile,
 } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-export const PACKAGE_VERSION = '0.5.0';
+export const PACKAGE_VERSION = '0.6.0';
 
 export const DEFAULT_CONFIG = Object.freeze({
   version: 1,
@@ -56,6 +57,15 @@ export const DEFAULT_CONFIG = Object.freeze({
   legacyMaxModeUpliftPercent: 20,
   stateRetentionDays: 14,
   readAllowlistFile: 'token-saver/read-allowlist',
+  billing: {
+    endpoint: '',
+    tokenEnv: 'CURSOR_USAGE_TOKEN',
+    timeoutMs: 5000,
+  },
+  anomalyAlerts: {
+    enabled: true,
+    projectedCostFraction: 0.8,
+  },
   models: {
     'auto-cost': {
       aliases: ['auto-cost', 'auto cost'],
@@ -222,6 +232,9 @@ export function pathsFor(root = cursorRoot()) {
     state: path.join(saver, 'state'),
     logs: path.join(saver, 'logs'),
     handoffs: path.join(saver, 'handoffs'),
+    billing: path.join(saver, 'billing.json'),
+    anomalies: path.join(saver, 'anomalies.jsonl'),
+    limits: path.join(saver, 'conversation-limits.json'),
   };
 }
 
@@ -246,6 +259,22 @@ export async function readJson(file, fallback = null) {
     if (error?.code === 'ENOENT') return fallback;
     throw new Error(`Cannot read JSON ${file}: ${error.message}`);
   }
+}
+
+export async function readConversationLimits(root = cursorRoot()) {
+  return (await readJson(pathsFor(root).limits, {})) || {};
+}
+
+export async function conversationLimit(root, hash) {
+  const limits = await readConversationLimits(root);
+  return limits[hash] || null;
+}
+
+export async function recordAnomaly(root, anomaly) {
+  const entry = { at: new Date().toISOString(), ...anomaly };
+  await mkdir(path.dirname(pathsFor(root).anomalies), { recursive: true });
+  await appendFile(pathsFor(root).anomalies, `${JSON.stringify(entry)}\n`, 'utf8');
+  return entry;
 }
 
 export async function writeJsonAtomic(file, value) {
@@ -322,6 +351,14 @@ export function validateConfig(config) {
   ];
   for (const key of booleans) {
     if (typeof config[key] !== 'boolean') errors.push(`${key} must be a boolean`);
+  }
+  if (!config.billing || typeof config.billing !== 'object') errors.push('billing must be an object');
+  if (!config.anomalyAlerts || typeof config.anomalyAlerts !== 'object') errors.push('anomalyAlerts must be an object');
+  if (config.billing && (!Number.isFinite(config.billing.timeoutMs) || config.billing.timeoutMs <= 0)) {
+    errors.push('billing.timeoutMs must be positive');
+  }
+  if (config.anomalyAlerts && (!Number.isFinite(config.anomalyAlerts.projectedCostFraction) || config.anomalyAlerts.projectedCostFraction <= 0 || config.anomalyAlerts.projectedCostFraction > 1)) {
+    errors.push('anomalyAlerts.projectedCostFraction must be between 0 and 1');
   }
   return errors;
 }
